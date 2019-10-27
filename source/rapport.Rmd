@@ -1,0 +1,62 @@
+---
+title: "Rapport"
+author: "Grimaux Nicolas Sensey Valentin"
+date: "27/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Introduction
+
+Le Lorem Ipsum est simplement du faux texte employé dans la composition et la mise en page avant impression. Le Lorem Ipsum est le faux texte standard de l'imprimerie depuis les années 1500, quand un imprimeur anonyme assembla ensemble des morceaux de texte pour réaliser un livre spécimen de polices de texte. Il n'a pas fait que survivre cinq siècles, mais s'est aussi adapté à la bureautique informatique, sans que son contenu n'en soit modifié. Il a été popularisé dans les années 1960 grâce à la vente de feuilles Letraset contenant des passages du Lorem Ipsum, et, plus récemment, par son inclusion dans des applications de mise en page de texte, comme Aldus PageMaker
+
+
+# Prérequis
+
+voii les ybariees requises pour ce projet
+```r
+install.packages("readxl")
+install.packages("questionr")
+install.packages("ggplot2")
+```
+
+
+
+```{r}
+install.packages("xlsx")
+library(xlsx)
+library(questionr)
+library(readxl)
+```
+
+# Nettoyage de la base de donnée 
+
+mon text pour gnérer ma base de donnée. vil comment y faut faire pour importer et nettoyer le jeux de donnée
+
+```{r}
+# Impreter les données sour R
+
+deputestable1<-read_excel("../datasets/deputes_table1net.xlsx") 
+deputestable2<-read_excel("../datasets/deputes_table2.xlsx")
+deputestable3<-read_excel("../datasets/deputes_table3.xlsx")
+"Il y a des problèmes avec la table 4 je pense que ca vient de la table Excel"
+deputestable4<-read_excel("../datasets/deputes_table4net.xlsx")
+
+"On récupère le genre, il n y a que 573 deputes dont le genre est renseigne"
+# genre_deputes<-read_excel("genre_deputes.xlsx")
+# Titre<-genre_deputes$Titre<-paste(genre_deputes$Prénom,genre_deputes$Nom,sep=" ")
+"Il convient de créer une nouvelle colonne dans deputestable1 pour pouvoir merge avec les deux autres"
+```
+
+
+# Nettoyer es données 
+
+Les données doivent nettouyé, pour jnsdksndsncsn
+
+
+
+

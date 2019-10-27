@@ -1,7 +1,7 @@
 
-"install.packages("readxl")"
-"install.packages("questionr")"
-"install.packages("ggplot2")"
+install.packages("readxl")
+install.packages("questionr")
+install.packages("ggplot2")
 library("readxl")
 library("xlsx")
 library("questionr")
