@@ -15,136 +15,151 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```
 
-# Introduction
+# Présentation des données
 
 ![coucoulol](../images/test.png)
 
 
-Le Lorem Ipsum est simplement du faux texte employé dans la composition et la mise en page avant impression. Le Lorem Ipsum est le faux texte standard de l'imprimerie depuis les années 1500, quand un imprimeur anonyme assembla ensemble des morceaux de texte pour réaliser un livre spécimen de polices de texte. Il n'a pas fait que survivre cinq siècles, mais s'est aussi adapté à la bureautique informatique, sans que son contenu n'en soit modifié. Il a été popularisé dans les années 1960 grâce à la vente de feuilles Letraset contenant des passages du Lorem Ipsum, et, plus récemment, par son inclusion dans des applications de mise en page de texte, comme Aldus PageMaker
+Le travail demandé consiste à analyser un jeu de donnée concernant les députés français.
+Les sources des données sont les suivantes :
+
+[Projet arcadie](https://projetarcadie.com/tableaux-thematiques)
+
+[Données de l'Assemblée Nationale](http://data.assemblee-nationale.fr/)
+
+Les variables et les méthodes à utiliser pour effectuer les analyses sont libres.
+Le jeu de données fourni est un fichier de format *.xlsx* comprenant 4 tables :
+
+* **deputestable1** : comprend 575 observations et 11 variables notamment les Nom, Prénom, Région, Profession et Groupe politique (complet) et Groupe politique(abrégé)
+* **deputestable2** : comprend 576 observations et 12 variables. Mis à part le Nom et le prénom cette table comprend les dates de naissance des députés, le statut des députés, les catégories de fonctionnaires...
+* **deputestable3** : comprend 576 obersvations et 4 variables. Cette table récapitule l'historique parlementaire de chaque député.
+* **deputestable4** : comprend 573 observations et 45 variables. Cette table récapitule tout ce qu'il y a à savoir concernant les duels politiques des dernières éléctions (abstention, candidat en face du vainqueur, etc)
 
 
-# Prérequis
 
-voii les ybariees requises pour ce projet
-To do : spécifier dépendance Java
+
+
+
+# Travail préparatoire
+## Prérequis
+
+Voici les librairies requises pour notre analyse. Certains librairies nécessitent d'avoir Java correctement installé.
+
 ```r
 install.packages("xlsx")
 install.packages("readxl")
 install.packages("questionr")
 install.packages("ggplot2")
+install.packages("scales")
 ```
 
 
 
 ```{r}
-
+library(scales)
 library(xlsx)
 library(questionr)
 library(readxl)
 library(ggplot2)
 ```
 
-# Nettoyage de la base de donnée 
+## Importation des données et fusion des tables
 
-mon text pour gnérer ma base de donnée. vil comment y faut faire pour importer et nettoyer le jeux de donnée
+Nous allons maintenant importer les données dans RStudio. Pour cela nous allons d'abord séparer notre fichier *.xlsx* comprenant 4 tables en 4 fichiers *.xlsx* comprenant chacun une table. Une fois ceci fait, nous allons fusionner nos 4 tables.
 
-```{r}
-# Importer les données sour R
+A l'issue de la fusion la table complète ne comprenait plus que 571 individus, nous avons donc cherché à savoir pourquoi ces derniers n'ont pas "matchés". Il s'agissait en fait de problèmes d'accent, de majuscules ou de deuxième prénom. 
+Voici les individus problématiques :
 
+
+* Amal-Amélia Lakrafi : Dans les Table 2 et 3 elle se nomme "Amal-Amélia Lakrafi" et dans la  Table 1 "Amélia Lakrafi".
+* Constance le Grip : Dans une des tables le "le" était écrit "Le".
+*	Thierry Benoît : Présence de l'accent circonflexe dans certaines tables et pas dans les autres.
+* Patricia Miralles : Le "e" est accentué ou non suivant la table.
+* Pierre Venteau TABLE1: N'existe pas dans la table 1.
+
+Nous allons corriger les problèmes d'accent et de second prénom avant d'importer les données. Ce faisant, on corrige bien les problemes de merge. Une seule personne disparait, cependant on veut la garder donc nous rajouterons l'argument  "all.x=TRUE" lors de la fusion.
+
+
+```{r, echo=FALSE}
 deputestable1<-read_excel("../datasets/deputes_table1net.xlsx") 
 deputestable2<-read_excel("../datasets/deputes_table2.xlsx")
 deputestable3<-read_excel("../datasets/deputes_table3.xlsx")
-#Il y a des problèmes avec la table 4 je pense que ca vient de la table Excel
-deputestable4<-read_excel("../datasets/deputes_table4net.xlsx")
+```
+Il y a également des problèmes avec la table 4. Elle comprend plusieurs colonnes avec le même nom et la première ligne de la table ne comprend pas les intitulés de colonnes. Nous allons donc la nettoyer au préalable directement sur le fichier *.xlsx*.
 
+```{r, echo=FALSE}
+deputestable4<-read_excel("../datasets/deputes_table4net.xlsx")
+```
+
+Il convient également de créer une nouvelle colonne Titre dans **deputestable1** pour pouvoir la fusionner avec les autres. Enfin, une fois que nous avons la même variable pour toutes les tables, nous la passons en majuscules afin d'éviter les erreurs mentionnées précédemment.
+Nous obtenons donc une table unique que nous appelerons **deputes**.
+
+```{r, echo=FALSE}
 # "On récupère le genre, il n y a que 573 deputes dont le genre est renseigne"
 genre_deputes<-read_excel("../datasets/genre_deputes.xlsx")
  Titre<-genre_deputes$Titre<-paste(genre_deputes$Prénom,genre_deputes$Nom,sep=" ")
-# "Il convient de créer une nouvelle colonne dans deputestable1 pour pouvoir merge avec les deux autres"
+
+```
 
 
+```{r, echo=FALSE}
 Titre<-deputestable1$Titre<-paste(deputestable1$Prénom,deputestable1$Nom_Propre,sep=" ")
 
-# "On passe le contenu des titres en majuscule pour proceder au merge"
+
 deputestable1$Titre<-toupper(deputestable1$Titre)
 deputestable2$Titre<-toupper(deputestable2$Titre)
 deputestable3$Titre<-toupper(deputestable3$Titre)
 genre_deputes$Titre<-toupper(genre_deputes$Titre)
+```
 
 
+```{r, echo=FALSE}
 deputes<-merge(deputestable2,deputestable3, by="Titre")
 deputes<-merge(deputes,deputestable1, by="Titre",all.x = TRUE)
 deputes<-merge(deputes,genre_deputes, by="Titre",all.x = TRUE)
-"Avec la nouvelle table1 on corrige bien les problemes de merge. Une seule personne disparait ce qui est normal cependant on veut la garder donc on va rajouter all.x=TRUE"
-
-
-
-"Point de doute pour le problème de merge à vérifier dans la table1 On arrive à 571 merge"
-
-"Problème trouvé : des personnes n'ont pas exactement le même prénom dans les deux bases j'essai donc de les repertoriers "
-
-"Amal-Amélia Lakrafi"
-"Table 2 et 3 : Amal-Amélia Lakrafi ; Table 1 : Amélia Lakrafi"
-
-"Constance le Grip"
-"Table 2 : Constance le Grip ; Table 3: Constance le Grip ; Table 1 : Constance Le Grip             Le problème se règle lorsqu'on passe titre ne majuscule"
-
-"	Thierry Benoît"
-"Table 2 : Thierry Benoît ;Table 3 : Thierry Benoit ; TABLE 1 : Thierry Benoit"
-
-"Patricia Miralles"
-"Table 2 : Patricia Miralles; TABLE 3 : Patricia Miralles; TABLE 1 : 	Patricia Mirallès"
-
-"Pierre Venteau"
-"Table 2 :Pierre Venteau ; TABLE 3: 	Pierre Venteau; TABLE1: Il n'existe pas dans la base 1"
-
-
-"********************* NETTOYAGE DE LA BASE FUSIONNEE ********************* "
 ```
 
 
-```{r}
-names(deputes)
+
+
+
+
+
+
+
+
+```{r, echo=FALSE}
 "On enlève les prenoms et noms en trop."
-"On veut enlever la colonne : 4 ; 18; 19;27;28"
+
 deputes<-deputes[,-c(4,18,19,27,28)]
-names(deputes)
-age<-c(rep(2019,576))
-deputes<-cbind(deputes,age)
 
-
-
-"Je veux creer des bases de naissance" 
-
-"**************************** GRAPHIQUES **********************************"
 ```
 
+#Analyse
 
-```{r}
-"genres"
+*Note : A partir de maintenant, le code ne figurera plus dans le corps du document mais sera mis en annexe*
+
+
+## Répartition du genre au sein de l'AN
+
+```{r, echo=FALSE}
+
 table(deputes$Sexe)
 g1<-ggplot(deputes, aes(x=Sexe)) + geom_bar()
 g1
 ```
 
 
-```{r}
-"Distribution des ages"
-x<-quantile(deputes$age, probs=c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1))
-x
-
-```
-
-
+## Répartition des partis politques au sein de l'assemblée
 ```{r, echo=FALSE}
-#Camembert siège
+
 Parti<-deputes$`Groupe politique (abrégé)`
 tableau<-table(Parti)
 tableau<-data.frame(tableau)
 repartition<-ggplot(tableau,aes(x="sieges",y=Freq, fill=Parti))+geom_bar(width = 1,stat="identity")
-repartition
 pie<-repartition+coord_polar("y",start=0)
 pie
+
 
 "Je voudrai faire un graphique sur la frequence de premier mandat par partie politique"
 
@@ -153,9 +168,53 @@ pie
 ```
 
 
-# Nettoyer es données 
 
-Les données doivent nettouyé, pour jnsdksndsncsn
+
+
+## Focus sur l'âge
+
+To do : rappeler qu'on crée la colonne âge et dire que le code est en annexe
+
+### Répartion générale des âges au sein de l'assemblée
+```{r, echo=FALSE}
+
+age<-c(rep(2019,576))
+
+deputes<-cbind(deputes,age)
+deputes$age<-deputes$age-deputes$`Date de naissance`
+
+
+agemoyen= aggregate(deputes$age,by = list(deputes$`Groupe politique (abrégé)`),FUN="mean")
+
+graphage<-ggplot(deputes, aes(y=age,x=factor(1)))
+graphage<- graphage+ geom_boxplot(fill="lightblue",colour="darkred",width=0.1) 
+graphage<-graphage + labs(title="Age AN", x ="", y = "Age")
+# graphage<-graphage + geom_text(data = agemoyen)
+graphage
+```
+
+### Répartition des âges par parti politique
+```{r, echo=FALSE}
+p <- ggplot(deputes, aes(Parti, age))
+p1<-p + geom_boxplot(aes(colour=Parti)) + labs(title="Répartition des âges par parti politique", x="Parti politique", y="Âge")
+p1
+```
+
+
+### Âge moyen des députés par parti politique
+```{r, echo=FALSE}
+ageparparti<-aggregate(deputes$age,by=list(deputes$`Groupe politique (abrégé)`),FUN="mean")
+
+meanage<-round(ageparparti$x,digits=0)
+gagemoyenparparti<-ggplot(data = ageparparti, aes(x=Group.1,y=x, colour=Group.1))+geom_bar(stat="identity",aes(fill=Group.1),show.legend = FALSE, width=0.6)+labs(title="Age moyen par parti politique",x="Parti politique",y="Age moyen") + geom_text(aes(label=meanage),vjust=-0.5,stat="identity",show.legend = FALSE,size=4.5,color="black")+ylim(0,70)+theme_minimal()
+
+
+
+gagemoyenparparti
+```
+
+
+
 
 
 
