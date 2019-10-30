@@ -2,12 +2,14 @@
 title: "Rapport"
 author: "Grimaux Nicolas Sensey Valentin"
 date: "27/10/2019"
-output: 
-  html_document :
-    pandoc_args: [
-          "--output=../index.html"
-        ]
-    toc: true
+output:
+  html_document:
+    pandoc_args: --output=../index.html
+    toc: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -45,22 +47,28 @@ Le jeu de données fourni est un fichier de format *.xlsx* comprenant 4 tables :
 
 Voici les librairies requises pour notre analyse. Certains librairies nécessitent d'avoir Java correctement installé.
 
-```r
+```{r eval=FALSE, include=FALSE}
 install.packages("xlsx")
 install.packages("readxl")
 install.packages("questionr")
 install.packages("ggplot2")
 install.packages("scales")
+install.packages("dplyr")
+install.packages("cowplot")
+install.packages("gridExtra")
 ```
 
 
 
-```{r}
+```{r message=FALSE}
 library(scales)
 library(xlsx)
 library(questionr)
 library(readxl)
 library(ggplot2)
+library(plyr)
+library(dplyr)
+library(gridExtra)
 ```
 
 ## Importation des données et fusion des tables
@@ -85,9 +93,10 @@ deputestable1<-read_excel("../datasets/deputes_table1net.xlsx")
 deputestable2<-read_excel("../datasets/deputes_table2.xlsx")
 deputestable3<-read_excel("../datasets/deputes_table3.xlsx")
 ```
-Il y a également des problèmes avec la table 4. Elle comprend plusieurs colonnes avec le même nom et la première ligne de la table ne comprend pas les intitulés de colonnes. Nous allons donc la nettoyer au préalable directement sur le fichier *.xlsx*.
+Il y a également des problèmes avec la table 4. Elle comprend plusieurs colonnes avec le même nom et la première ligne de la table ne comprend pas les intitulés des colonnes. Il a donc fallu supprimer la première ligne de la table **« Résultats par circonscriptions législatives - Tour 2 »** ainsi que rehausser le tableau entier sur la première ligne pour que le logiciel R associe correctement chaque intitulé de colonne comme variable de la data frame. Nous avons extrait le genre des députés de cette base. Il a fallu pour cela, harmoniser les noms et prénoms de la table 4 avec les noms de la table 1,2 et 3. Il s’agissait majoritairement d’accents manquant comme :  « é », « è » ou « à ».  
+Une fois l’harmonisation terminée nous avons récupérer uniquement les données de genre et les noms et prénoms que nous avons réduits en "Titre" comme dans les autres tables puis nous avons procédé à la fusion. Le nettoyage a été réalisé sur le fichier *.xlsx*. 
 
-```{r, echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 deputestable4<-read_excel("../datasets/deputes_table4net.xlsx")
 ```
 
@@ -96,7 +105,7 @@ Nous obtenons donc une table unique que nous appelerons **deputes**.
 
 ```{r, echo=FALSE}
 # "On récupère le genre, il n y a que 573 deputes dont le genre est renseigne"
-genre_deputes<-read_excel("../datasets/genre_deputes.xlsx")
+genre_deputes<-read_excel("../datasets/genre_deputes2.xlsx")
  Titre<-genre_deputes$Titre<-paste(genre_deputes$Prénom,genre_deputes$Nom,sep=" ")
 
 ```
@@ -125,58 +134,68 @@ deputes<-merge(deputes,genre_deputes, by="Titre",all.x = TRUE)
 
 
 
-
+On enlève les prenoms et noms en trop.
 
 
 ```{r, echo=FALSE}
-"On enlève les prenoms et noms en trop."
 
 deputes<-deputes[,-c(4,18,19,27,28)]
 
 ```
 
-#Analyse
+# Analyse
 
 *Note : A partir de maintenant, le code ne figurera plus dans le corps du document mais sera mis en annexe*
 
+Nous avons choisi pour notre analyse de croiser les variables concernant les mandats et l'âge avec les variables concernant le genre et les partis politiques.
 
-## Répartition du genre au sein de l'AN
+## Introduction
 
-```{r, echo=FALSE}
+Pour commencer, regardons la répartition générale des partis politiques et du genre au sein de l'assemblée.
 
-table(deputes$Sexe)
-g1<-ggplot(deputes, aes(x=Sexe)) + geom_bar()
+
+
+```{r echo=FALSE, fig.height=3, fig.width=5}
+
+Parti<-deputes$`Groupe politique (abrégé)`
+Parti<-na.omit(Parti)
+Partifreq.data<-data.frame(Partis=c("FI","GDR","LaREM","LR","LT","MODEM","NI","SOC","UDI-AGIR"),n=c(17,16,303,104,19,46,13,29,28),prop=c(3,2.8,52.7,18.1,3.3,8.0,2.3,5.0,4.9))
+
+
+Partifreq.data<-Partifreq.data%>%arrange(desc(Partis))%>%mutate(lab.ypos=cumsum(prop)-0.5*prop)
+
+graph<-ggplot(Partifreq.data, aes(x=2,y=prop,fill=Partis))+geom_bar(width = 1, stat = "identity", color = "white") +   coord_polar("y", start = 0)+ geom_text(aes(y = lab.ypos, label = prop), color = "black")+theme_void()+xlim(0.5,2.5)+ggtitle("Paysage politique de l'Assemblée Nationale")
+graph
+
+
+
+```
+
+Ce graphique représente le pourcentage de sièges qu'occupe chaque parti à l'Assemblée Nationale. Sans surprises nous remarquons que le parti actuellement au gouvernement, *La République en Marche (LaREM)*, possède la **majorité absolue** dans l'hémicycle (52.7%). Le deuxième parti le plus représenté est le parti historique de droite : *Les Républicains (LR)* ex UMP à 18%. Enfin, nous retrouvons quasiment ex-aequo à 5% *Le Parti Socialiste (SOC)* et le nouveau parti de gauche *La France Insoumise (FI).*
+
+```{r echo=FALSE, fig.height=3, fig.width=5}
+
+tabtemp=as.data.frame(table(deputes$Sexe,useNA="ifany"))
+g1<-ggplot(tabtemp, aes(x=Var1, y=Freq,fill=Var1))+ geom_bar(stat="identity",color="black")+geom_text(aes(label=Freq), vjust=1.5)+theme_minimal() + labs(title="Les genres à l'Assemblée Nationale",x="Genre", y="Effectif")+scale_fill_discrete(name = "Genre")
 g1
 ```
 
 
-## Répartition des partis politques au sein de l'assemblée
-```{r, echo=FALSE}
-
-Parti<-deputes$`Groupe politique (abrégé)`
-tableau<-table(Parti)
-tableau<-data.frame(tableau)
-repartition<-ggplot(tableau,aes(x="sieges",y=Freq, fill=Parti))+geom_bar(width = 1,stat="identity")
-pie<-repartition+coord_polar("y",start=0)
-pie
 
 
-"Je voudrai faire un graphique sur la frequence de premier mandat par partie politique"
+Le diagramme en barres était probablement le graphique le plus adapté pour rendre compte de la parité entre homme et femme au sein de l’assemblée. Il a été réalisé avec 576 observations. Comme indiqué sur chaque barre, il y a **332 hommes** et **215 femmes**. Nous ne sommes donc toujours pas parvenus à la parité, cependant on s’en approche. On peut remarquer que la somme n’atteint pas les 576. En effet il y a 29 NA qui correspondent à des colonnes non renseignées. Après avoir réalisé des recherches, nous avons découvert qu’il s’agit majoritairement de députés suppléants qui ont pris leurs fonctions après le recensement qui a permis de constituer la base de donnée. En effet, lorsqu’un député est appelé comme ministre ou a une plus haute fonction d’Etat, c’est son suppléant qui le remplace à l’Assemblée nationale.
+
+## Analyses croisées entre l'âge, les partis politiques et le genre
+
+Il ne semble pas incongru de considérer l’âge comme un indicateur de l’expérience d’un individu. L’âge des députés est donc une variable que nous considérons comme importante. Dans cette partie nous nous attachons donc à mettre en lumière sa distribution au sein de l’Assemblée. Tout d’abord nous verrons la distribution générale de l’âge puis nous ferons une analyse sur la distribution de l’âge selon le genre et enfin nous intégrerons les partis politiques dans notre analyse. 
 
 
+### Répartion générale des âges et du genre au sein de l'assemblée
 
-```
-
-
-
+*Note : Nous avons créé une nouvelle variable "age" qui est simplement calculée en fonction de la variable "Date de naissance" déjà présente (voir code en annexe).*
 
 
-## Focus sur l'âge
-
-To do : rappeler qu'on crée la colonne âge et dire que le code est en annexe
-
-### Répartion générale des âges au sein de l'assemblée
-```{r, echo=FALSE}
+```{r echo=FALSE, fig.height=3, fig.width=5}
 
 age<-c(rep(2019,576))
 
@@ -184,38 +203,212 @@ deputes<-cbind(deputes,age)
 deputes$age<-deputes$age-deputes$`Date de naissance`
 
 
-agemoyen= aggregate(deputes$age,by = list(deputes$`Groupe politique (abrégé)`),FUN="mean")
+agemoyen= aggregate(deputes$age,by = list(deputes$`Groupe politique (abrégé)`),FUN="mean",na.rm=FALSE, na.action=na.pass)
 
+
+```
+
+On regarde d'abord la répartition des âges des députés.
+
+```{r eval=FALSE, echo=FALSE}
+summary(deputes$age)
+sd(deputes$age)*sqrt(575/576)
+```
+Minimum | 1er quartile | Médiane | 3ème quartile | Maximum  | Moyenne| Ecart-type
+----------|------------|---------|--------|---------|--|---|
+26  | 43|52|60|81|51.23|11.04
+
+
+Ce tableau statistique nous apporte beaucoup d’informations. En effet, il nous apprend que le doyen de nos députés est âgé de 81 ans alors que le plus jeune a 26 ans. L’étendue de l’échantillon est donc de 55 ans. On remarque donc que cette étendue est plus élevée que l’âge moyen des députés qui est vaut 51.23 ans. Nous pourrions craindre une confrontation entre génération qui pourrait très probablement réduire la pertinence du débats politique à l’Assemblée.  
+Fort heureusement, le tableau nous apprend que les âges ne sont pas massés aux extrémités. En effet **50 % des députés ont un âge compris entre 43 et 60 ans.** 
+Pour mieux percevoir l’allure de la distribution des âges au sein de l’Assemblée, nous avons réalisé deux graphiques : la densité et la fonction de répartition empirique. 
+
+
+
+
+```{r echo=FALSE, warning=FALSE, fig.height=3, fig.width=6}
 graphage<-ggplot(deputes, aes(y=age,x=factor(1)))
-graphage<- graphage+ geom_boxplot(fill="lightblue",colour="darkred",width=0.1) 
-graphage<-graphage + labs(title="Age AN", x ="", y = "Age")
-# graphage<-graphage + geom_text(data = agemoyen)
-graphage
-```
-
-### Répartition des âges par parti politique
-```{r, echo=FALSE}
-p <- ggplot(deputes, aes(Parti, age))
-p1<-p + geom_boxplot(aes(colour=Parti)) + labs(title="Répartition des âges par parti politique", x="Parti politique", y="Âge")
-p1
+graphage<- graphage+ geom_boxplot(fill="white",colour="black",width=0.1)
+graphage<-graphage + labs(title="Répartition des âges le l'Assemblée Nationale", x ="", y = "Age")+ theme_minimal() +ylim(20,80)+coord_flip()
 ```
 
 
-### Âge moyen des députés par parti politique
-```{r, echo=FALSE}
+```{r echo=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+AGEGENRE<-deputes[,c(23,24)]
+AGEGENRE<-na.omit(AGEGENRE)
+mu<-ddply(AGEGENRE,"Sexe",summarise,grp.mean=mean(age))
+gausstest= ggplot(AGEGENRE, aes(x=age, color=Sexe))+geom_density()+geom_vline(data=mu, aes(xintercept=grp.mean, color=Sexe), linetype="dashed")+theme_minimal()+xlim(10,90)+theme(legend.position="bottom")
+
+gausstest2= ggplot(AGEGENRE, aes(x=age))+geom_density()+theme_minimal()+geom_vline(data=AGEGENRE, aes(xintercept=median(age)), color="red")+geom_vline(data=AGEGENRE, aes(xintercept=mean(age)),color="blue",linetype="dashed")+xlim(10, 90) +geom_vline(data=AGEGENRE, aes(xintercept=quantiles[4]),color="red",linetype="dashed")+geom_vline(data=AGEGENRE, aes(xintercept=quantiles[2]),color="red",linetype="dashed")
+
+
+
+
+
+empirgenre<-ggplot(AGEGENRE,aes(x=age, color=Sexe))+stat_ecdf()+xlab("Age")+ylab("Fonction de répartition cumulée")+theme_minimal()+geom_vline(data=mu, aes(xintercept=grp.mean, color=Sexe), linetype="dashed")+theme(legend.position="bottom")
+
+
+
+quantiles<-quantile(AGEGENRE$age)
+
+empir<-ggplot(AGEGENRE,aes(x=age))+stat_ecdf()+xlab("Age")+ylab("Fonction de répartition cumulée")+theme_minimal()+geom_vline(data=AGEGENRE, aes(xintercept=median(age)),color="red")+geom_vline(data=AGEGENRE, aes(xintercept=quantiles[4]),color="red",linetype="dashed")+geom_vline(data=AGEGENRE, aes(xintercept=quantiles[2]),color="red",linetype="dashed")
+
+
+
+grid.arrange(gausstest2,empir,ncol=2,nrow=1,widths=c(5,5))
+```
+
+
+Ces deux graphiques nous montrent que l’âge des députés est massé autour de la moyenne et qu’il ne comporte que peu de valeurs extrêmes. On remarque également que la forme de la distribution statistique générale des âges est **proche de celle d’une loi normale.** La distribution est quasiment centrée en sa moyenne. En effet la droite verticale rouge qui représente la médiane se superpose presque à la moyenne tracée en pointillé bleu.   
+Pour illustrer cette ressemblance nous pouvons utiliser la propriété selon laquelle 95% des individus d’une distribution gaussienne sont réparties en la moyenne et + ou – 2 fois l’écart type.   
+Dans le cas de notre distribution la moyenne est de 51.23 et l’écart type est de 11.04. **95% de la population devrait donc se trouver entre 73.31 et 29.15.** Par soucis de cohérence nous choisirons 73 et 29 et nous inclurons les bornes. Il y a 11 individus ayant 73 ans ou plus et 13 individus ayant 29 ans ou moins. Pour rappel notre échantillon est constitué de 576 individus. Nous avons 24/576 individus en dehors de l’intervalle [29;73] ce qui correspond à 0.042 et donc 95,8% de la population comprise entre la moyenne et plus ou moins deux fois l’écart type. Ce qui montre bien la ressemble entre la forme de notre distribution et celle d’une loi normale.      
+La fonction de répartition empirique a été enrichie de la médiane (droite rouge) et respectivement du premier et troisième quartile (droite en pointillé rouge) pour représenter fidèlement les valeurs du tableau de donnée. 
+
+```{r echo=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+grid.arrange(gausstest,empirgenre, ncol=2,nrow=1,widths=c(5,5))
+```
+
+Nous allons maintenant voir la distribution de l’âge selon le genre. Tout d’abord on remarque que les femmes sont en moyenne légèrement moins âgées que les hommes. La forme de leur distribution est également différente. La distribution des femmes est plus étalée et moins centrée sur la moyenne que celle des hommes qui, quant à elle, a presque la même forme que la distribution générale avec cependant des creux plus marqué sur les flancs.  
+Les fonctions de répartition empirique sont moins régulières que la fonction de répartition générale. L’agrégation des deux sous-échantillons permet de lisser la distribution et de la faire, en quelque sorte, « converger »  vers une loi normale (il aurait été intéressant d’étudier la forme de la distribution si l’assemblée était constituée de, par exemple, 1000 députés).
+
+### Répartition des âges par parti politique et genre
+```{r echo=FALSE, fig.height=3, fig.width=5}
+AGE<-deputes[,c(22,24)]
+AGE<-na.omit(AGE)
+medianage<-aggregate(AGE$age,by=list(AGE$`Groupe politique (abrégé)`),FUN="median")
+vecteurmedianes<-medianage$x
+boxplotage<-ggplot(AGE, aes(x=`Groupe politique (abrégé)`,y=age, color=`Groupe politique (abrégé)`))+ geom_boxplot(show.legend = FALSE) + labs(title="Boite à moustache de l'age par parti politique",x="Parti politique",y="Age")+theme_minimal() +geom_hline(aes(yintercept=median(deputes$age)),color="black",linetype="dashed")
+boxplotage
+
+
+```
+
+
+Parti | FI | GDR |LaREM|LR|LT|MODEM|NI|SOC|UDI-AGIR
+-----|--|--|--|--|--|--|--|--|--|
+Médiane | 44.0 |58.5|48.0|56.5|56.0|54.5|51|58.0|53.0
+
+Précédemment, nous avons vu que la médiane de l'âge au sein de l'Assemblée Nationale était de **52 ans.**Maintenant, tâchons de regarder quels sont les partis politiques qui se situent en-dessous ou au-dessus de cette médiane (pointillés sur le graphique).  
+Ce qu'on remarque : 
+
+* La *France Insoumise* et *La République en Marche* sont en dessous de cette médiane (avec les Non Inscrits).
+* Tous les autres partis sont au-dessus.
+
+Le résultat n'est pas illogique, FI et LaREM sont deux partis qui sont apparus pour la première fois lors des éléctions de 2017. Cela reste cohérent avec le vent de renouveau qui a soufflé sur la France lors de la dernière présidentielle et l'envie des nouveaux partis de faire disparaître les "vieux dinosaures" de la politique Française. On remarque, par ailleurs, à ce sujet que les deux partis historiques *Les Républicains* et le *Parti Socialiste* comptent parmi les députés les plus âgés.
+
+### Âge moyen des députés par parti politique et genre
+```{r echo=FALSE, fig.height=3, fig.width=5}
 ageparparti<-aggregate(deputes$age,by=list(deputes$`Groupe politique (abrégé)`),FUN="mean")
 
-meanage<-round(ageparparti$x,digits=0)
-gagemoyenparparti<-ggplot(data = ageparparti, aes(x=Group.1,y=x, colour=Group.1))+geom_bar(stat="identity",aes(fill=Group.1),show.legend = FALSE, width=0.6)+labs(title="Age moyen par parti politique",x="Parti politique",y="Age moyen") + geom_text(aes(label=meanage),vjust=-0.5,stat="identity",show.legend = FALSE,size=4.5,color="black")+ylim(0,70)+theme_minimal()
+sdageparparti<-aggregate(deputes$age,by=list(deputes$`Groupe politique (abrégé)`),FUN="sd")
+sdageparparti$x=sdageparparti$x*sqrt(575/576)
 
+ageparparti=merge(ageparparti, sdageparparti, by="Group.1")
+
+meanage<-round(ageparparti$x.x,digits=0)
+gagemoyenparparti<-ggplot(data = ageparparti, aes(x=Group.1,y=x.x, colour=Group.1))+geom_bar(stat="identity", color="black",aes(fill=Group.1),show.legend = FALSE, width=0.6)+labs(title="Age moyen par parti politique",x="Parti politique",y="Age moyen") + geom_text(aes(label=meanage),vjust=4,stat="identity",show.legend = FALSE,size=4.5,color="black")+ylim(0,70)+geom_errorbar(aes(ymin=meanage-x.y,ymax=meanage+x.y), color="black")+theme_minimal()
 
 
 gagemoyenparparti
 ```
 
+Intéressons-nous désormais à l'âge moyen des députés selon le parti et aux écarts-types.
+Nous avons vu précédemment que la médiane et la moyenne pour l'âge étaient très proches ce qui explique pourquoi ce graphique est similaire au précédent. Cependant, l'ajout des barres d'erreur nous donne plus d'information sur la répartition des individus.
+Ces barres représentent l'intervalle [moyenne-(écart-type); moyenne+(écart-type)] pour chacun des partis.
+
+```{r echo=FALSE}
+sdageparparti
+```
+
+On remarque que les écart-types sont proches pour chacun des partis, ce qui explique pourquoi les barres d'erreur sont presque identiques. L'étalement des âges autour de la moyenne est donc similaire pour tous les partis et les députés d'un même parti ont des âges plutôt proches. Si nous comparons maintenant parti par parti nous pouvons remarquer quelques résultats intéressants :
+
+* *La République en Marche* a des députés en moyenne **10 ans plus jeune** que les députés du *Parti Socialiste*. 
+* Presque **une décennie** sépare également *La France Insoumise* et *Les Républicains*.
+* *Les Républicains*, *Libertés et Territoire* et le *Modem* ont des députés du même âge en moyenne mais *Les Républicains* sont légèrement plus dispersés autour de la moyenne (et les deux députés les plus âgés sont de ce parti).
+
+
+Maintenant, ajoutons un nouveau niveau d'interprétation avec le genre des députés.
+
+```{r, echo=FALSE, fig.height=3, fig.width=7}
+
+age_genre_parti<-aggregate(deputes$age,by=list(deputes$`Groupe politique (abrégé)`,deputes$Sexe),FUN="mean")
+
+
+q <- ggplot(data=age_genre_parti, aes(x=Group.1, y=x, fill=Group.2)) +geom_bar(stat="identity", color="black", position=position_dodge())+geom_text(aes(label=round(x)), vjust=1.6, color="black", position = position_dodge(0.9), size=2.5) +labs(title = "Âge moyen par parti selon le genre", x="Parti politique", y="Âge moyen")+ theme_minimal() +scale_fill_discrete(name="Genre")
+
+q
 
 
 
+
+```
+  
+  Pour la plupart des partis politiques, **la moyenne d'âge chez les femmes est plus faible ou la même que celle des hommes.** Une exception notable est au *Parti Socialiste* où les femmes sont en moyenne d'une part les plus âgées de l'Assemblée, de 4 ans plus vieilles que les hommes du *Parti Socialiste* d'autre part.  
+Il y a un écart de 5 ans entre hommes et femmes au sein d'un parti pour : *La France Insoumise*, *Libertés et Territoires* et le *MODEM*.
+
+### Conclusions de l'analyse 
+
+Notre analyse nous a permis de mettre en lumière les points suivants concernant les députés de France :
+
+* Il y a plus d'hommes que de femmes dans l'hémicycle.
+* Les femmes sont en moyenne plus jeunes que les hommes.
+* Les deux partis politiques les plus récents (FI et LaREM) sont en moyenne **10 ans plus jeunes** que les deux anciens grands partis de France (LR et SOC).
+* La distribution de l'âge des députés est presque celle d'une loi normale.
+* 50% des députés ont entre 43 et 60 ans.
+* Il y a des **différences générationnels entre partis mais pas au sein d'un même parti** (écarts-types tous proches et faibles).
+
+## Analyses sur les mandats
+
+Il nous paraît judicieux de compléter notre analyse sur l'âge par une analyse sur le nombre de mandats. Il n'était pas pertinent d'inclure le nombre de mandats dans une analyse sur l'âge car il est évident que plus une personne est âgée et plus il est possible qu'elle ait cumulé des mandats. Une personnalité politique de plus de 60 ans a forcément plus de chances d'avoir 2 mandats qu'un individu d'une vingtaine d'années qui a participé à sa première éléction.  
+Pour cette raison, nous avons décidé de traiter les mandats dans une section séparée. Nous l'analyserons dans un premier temps selon les partis politiques puis selon les partis politiques combinés au genre.
+
+### Nombre de mandats selon le parti politique
+
+```{r, echo=FALSE}
+deputessanspierre <- subset(deputes, NOM!="VENTEAU")
+```
+
+```{r, echo=FALSE, fig.height=3, fig.width=5}
+
+mandatparparti<-aggregate(deputes$`Nombre de mandats`,by=list(deputes$`Groupe politique (abrégé)`),FUN="mean")
+
+sdmandatparparti<-aggregate(deputes$`Nombre de mandats`,by=list(deputes$`Groupe politique (abrégé)`),FUN="sd")
+
+sdmandatparparti$x=sdmandatparparti$x*sqrt(574/575)
+
+
+mandatparparti=merge(mandatparparti, sdmandatparparti, by="Group.1")
+meanmandat<-round(mandatparparti$x.x,digits=2)
+
+gmandatparparti<-ggplot(data = mandatparparti, aes(x=Group.1,y=x.x, colour=Group.1))+geom_bar(stat="identity",color="black",aes(fill=Group.1),show.legend = FALSE, width=0.6)+labs(title="Nombre de mandats moyen par parti politique",x="Parti politique",y="Nombre de mandats moyen") + theme_minimal()+geom_errorbar(aes(ymin=meanmandat-x.y,ymax=meanmandat+x.y), color="black")+theme_minimal()
+gmandatparparti
+
+```
+```{r, echo=FALSE}
+vvvv = mandatparparti
+vvvv = rename.variable(vvvv, old="x.x", new="moyenne")
+vvvv = rename.variable(vvvv, old="x.y", new="ecart_type")
+vvvv
+```
+
+Tout d'abord, intéressons nous au nombre de mandats moyen par parti politique. Nous retrouvons cette corrélation "naturelle" entre le nombre de mandats et l'âge ici. En effet, les deux partis politiques les plus anciens (et les plus importants), *Les Républicains* et *Le Parti Socialiste*, sont ceux qui ont le nombre de mandats moyen le plus élevé. Ces 2 partis se sont constamment partagés l'hémicycle sous la 5ème République, il est donc logique d'y retrouver les députés avec le plus de mandats (en moyenne).  
+De manière symétrique, *La France Insoumise*, le *Modem* et *La République en Marche* sont les partis les plus jeunes. Tous les députés de FI et du MODEM en sont donc à leur **premier mandat** tandis que LaREM est légèrement au-dessus (ceci s'explique par le changement d'étiquette de certains députés).  
+Maintenant, analysons les barres d'erreur construites de la même méthode qu'auparavant (centrés sur la moyenne à plus ou moins un écart-type). Il y a une grande dispersion du nombre de mandats (à cette échelle) pour tous les partis (mis à part les 3 nouveaux à l'Assemblée) ce qui veut dire que **les députés inexpérimentés sont au contact de députés expérimentés**. Les tous jeunes partis **ne bénéficient pas de cet avantage de formation par des mentors**, ce qui pourrait permettre aux détracteurs d'un parti jeune de remettre en question la pertinence de ses décisions.
+
+*(Précisons tout de même que les anciens députés qui forment les plus jeunes est une hypothèse que nous avons formulé)*
+
+### Nombre de mandats selon le parti politique et le genre
+
+
+```{r, echo=FALSE, fig.height=3, fig.width=6}
+
+mandatpartisexe<-aggregate(deputes$`Nombre de mandats`,by=list(deputes$`Groupe politique (abrégé)`,deputes$Sexe),FUN="mean")
+
+
+p <- ggplot(data=mandatpartisexe, aes(x=Group.1, y=x, fill=Group.2)) +geom_bar(stat="identity", color="black", position=position_dodge())+geom_text(aes(label=round(x,digits=2)), vjust=1.6, color="black", position = position_dodge(0.9), size=2.5) +labs(title = "Nombre de mandats moyen par parti selon le genre", x="Parti politique", y="Nombre de mandats moyen")+ theme_minimal() +scale_fill_discrete(name="Genre")
+
+p
+```
 
 
 
